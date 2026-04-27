@@ -1,0 +1,26 @@
+server:
+  port: ${SERVER_PORT:8080}
+
+spring:
+  application:
+    name: {{PROJECT_NAME}}
+  jackson:
+    default-property-inclusion: non_null
+
+d9:
+  base-url:                 ${D9_BASE_URL:https://drap-sandbox.digitnine.com}
+  web-component-base-url:   ${D9_WEBCOMPONENT_BASE_URL:https://drap-sbx.digitnine.com}
+  client-id:                ${D9_CLIENT_ID:cdp_app}
+  client-secret:            ${D9_CLIENT_SECRET:}
+  username:                 ${D9_USERNAME:}
+  password:                 ${D9_PASSWORD:}
+  sender:                   ${D9_SENDER:}
+  channel:                  ${D9_CHANNEL:Direct}
+  company:                  ${D9_COMPANY:}
+  branch:                   ${D9_BRANCH:}
+  webhook-secret:           ${D9_WEBHOOK_SECRET:}
+
+logging:
+  level:
+    com.partner.d9: INFO
+    org.springframework.web.reactive.function.client.ExchangeFunctions: WARN

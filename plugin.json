@@ -1,0 +1,45 @@
+{
+  "name": "digit9-paas",
+  "version": "0.1.0",
+  "description": "Digit9 Payments-as-a-Service integration plugin for Claude Code. Teaches partner LFIs how to integrate the cross-border remittance API correctly, with live sandbox calls, scaffolded boilerplate in Java/Spring and Node/TS, and end-to-end happy-path verification.",
+  "author": {
+    "name": "Digit9",
+    "url": "https://developer.digitnine.com"
+  },
+  "license": "Proprietary",
+  "claudeCode": {
+    "minVersion": "1.0.0"
+  },
+  "skills": [
+    "skills/d9-auth",
+    "skills/d9-onboard",
+    "skills/d9-master-data",
+    "skills/d9-quote",
+    "skills/d9-transaction",
+    "skills/d9-status",
+    "skills/d9-webhooks"
+  ],
+  "commands": [
+    "commands/d9-scaffold.md",
+    "commands/d9-test.md",
+    "commands/d9-validate.md",
+    "commands/d9-auth-check.md"
+  ],
+  "mcpServers": {
+    "digit9-sandbox": {
+      "command": "node",
+      "args": ["${pluginDir}/mcp/digit9-sandbox-server/dist/index.js"],
+      "env": {
+        "D9_BASE_URL": "https://drap-sandbox.digitnine.com",
+        "D9_CLIENT_ID": "${env:D9_CLIENT_ID}",
+        "D9_CLIENT_SECRET": "${env:D9_CLIENT_SECRET}",
+        "D9_USERNAME": "${env:D9_USERNAME}",
+        "D9_PASSWORD": "${env:D9_PASSWORD}",
+        "D9_SENDER": "${env:D9_SENDER}",
+        "D9_CHANNEL": "${env:D9_CHANNEL:-Direct}",
+        "D9_COMPANY": "${env:D9_COMPANY}",
+        "D9_BRANCH": "${env:D9_BRANCH}"
+      }
+    }
+  }
+}

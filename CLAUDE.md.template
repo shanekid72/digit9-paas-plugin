@@ -1,0 +1,55 @@
+# {{PROJECT_NAME}} — Digit9 PaaS Integration
+
+This project integrates with the **Digit9 PaaS** (Payments-as-a-Service) cross-border remittance API.
+
+## Stack
+
+- Language: **{{LANGUAGE}}**
+- Service type: **{{SERVICE_TYPE}}** (C2C or B2B)
+- Default corridor: **{{DEFAULT_CORRIDOR}}** (e.g. AE → IN BANK)
+
+## Critical context for Claude
+
+When working on this project, you are integrating with Digit9's PaaS API. Read the relevant skill from the `digit9-paas` plugin before generating any integration code:
+
+- `d9-auth` — for anything touching tokens, the four required headers, or 401 errors
+- `d9-onboard` — for embedded web component setup, session init, WebView messaging
+- `d9-master-data` — for banks, branches, corridors, country/mode validation
+- `d9-quote` — for quote requests, FX rates, fee parsing, 10-minute TTL handling
+- `d9-transaction` — for createTransaction; C2C vs B2B sender shape; BANK/CASHPICKUP/WALLET receiver shape; 806500 error handling
+- `d9-status` — for confirmTransaction, enquire polling, cancel
+- `d9-webhooks` — for receiving webhooks, HMAC-SHA256 verification, idempotency, reconciliation
+
+## Project conventions
+
+- All Digit9 calls go through a single `D9Client` (`src/d9/client.{java,ts}`). Do not call `axios`/`WebClient` directly elsewhere.
+- The four context headers (`sender`, `channel`, `company`, `branch`) are required on every endpoint. They are injected by `D9Client`. Never set them manually in business code.
+- Access tokens are cached in `D9Client` with a 30-second safety margin before `expires_in`. Refresh is automatic.
+- Partner transaction references use the prefix `{{PARTNER_PREFIX}}_` followed by a UUID.
+- Webhooks live at `POST /webhooks/digit9` and are verified before any state change.
+
+## Sandbox
+
+- Base URL: `https://drap-sandbox.digitnine.com`
+- Token endpoint: `/auth/realms/cdp/protocol/openid-connect/token` (form-urlencoded, `grant_type=password`)
+- Credentials: see `.env` (never commit). Template in `.env.example`.
+
+## Common gotchas (don't relearn these)
+
+1. **Quote expires in 10 minutes.** If you call `createTransaction` with a stale `quote_id` you get `40004 NOT_FOUND`. The client auto-detects expiry and re-quotes; do not paper over this with retries.
+2. **`account_type_code` is mandatory for non-PK BANK transfers.** Skipping it returns `806500 UNPROCESSABLE_ENTITY`. The DTO validates this.
+3. **`agent_transaction_ref_number` is your idempotency key on createTransaction**, not a system identifier. The system-generated `transaction_ref_number` (16 chars) is the canonical ID for everything afterward.
+4. **Webhooks are signed.** Always verify `X-Signature` HMAC-SHA256 over the raw body before any state change. Reject by returning 401, not 200.
+5. **Don't trust webhooks alone.** Run a nightly reconciliation that calls `enquire-transaction` for any transaction not in a terminal state. Webhooks only retry 3 times.
+
+## Tests
+
+- `npm test` / `mvn test` — unit tests with mocked sandbox
+- `/d9:test` — runs the canonical happy path against the live sandbox
+- `/d9:validate` — checks integration code against Digit9 patterns (run before PR)
+
+## Useful commands inside Claude
+
+- `/d9:auth-check` — verify credentials and connectivity
+- `/d9:test` — full happy-path smoke test against sandbox
+- `/d9:validate` — review integration code for anti-patterns

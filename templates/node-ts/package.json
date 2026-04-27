@@ -1,0 +1,31 @@
+{
+  "name": "{{PROJECT_NAME}}",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Digit9 PaaS integration ({{SERVICE_TYPE}}, {{DEFAULT_CORRIDOR}})",
+  "scripts": {
+    "dev":       "tsx watch src/index.ts",
+    "build":     "tsc",
+    "start":     "node dist/index.js",
+    "typecheck": "tsc --noEmit",
+    "test":      "vitest run",
+    "test:watch":"vitest"
+  },
+  "dependencies": {
+    "axios":    "^1.7.0",
+    "dotenv":   "^16.4.0",
+    "express":  "^4.19.0",
+    "uuid":     "^9.0.0",
+    "zod":      "^3.23.0"
+  },
+  "devDependencies": {
+    "@types/express":  "^4.17.0",
+    "@types/node":     "^20.0.0",
+    "@types/uuid":     "^9.0.0",
+    "tsx":             "^4.7.0",
+    "typescript":      "^5.4.0",
+    "vitest":          "^1.6.0"
+  },
+  "engines": { "node": ">=18" }
+}
