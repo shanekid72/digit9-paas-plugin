@@ -7,24 +7,6 @@
     "url": "https://developer.digitnine.com"
   },
   "license": "Proprietary",
-  "claudeCode": {
-    "minVersion": "1.0.0"
-  },
-  "skills": [
-    "skills/d9-auth",
-    "skills/d9-onboard",
-    "skills/d9-master-data",
-    "skills/d9-quote",
-    "skills/d9-transaction",
-    "skills/d9-status",
-    "skills/d9-webhooks"
-  ],
-  "commands": [
-    "commands/d9-scaffold.md",
-    "commands/d9-test.md",
-    "commands/d9-validate.md",
-    "commands/d9-auth-check.md"
-  ],
   "mcpServers": {
     "digit9-sandbox": {
       "command": "node",
