@@ -2,7 +2,7 @@
 description: Review the partner's integration code against Digit9 patterns and the anti-pattern lists in each skill. Produces a prioritized report — blockers, warnings, and nice-to-have improvements.
 ---
 
-You are running the `/d9:validate` command. Your job is to review the partner's existing integration code against the canonical patterns in the `digit9-paas` plugin's skills, and produce a prioritized findings report.
+You are running the `/digit9-paas:d9-validate` command. Your job is to review the partner's existing integration code against the canonical patterns in the `digit9-paas` plugin's skills, and produce a prioritized findings report.
 
 ## Scope
 

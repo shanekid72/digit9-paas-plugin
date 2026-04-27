@@ -2,14 +2,14 @@
 description: Run an end-to-end happy-path smoke test against the Digit9 PaaS sandbox — auth, master data, quote, create transaction, confirm, enquire, and webhook simulation. Reports each step with timing.
 ---
 
-You are running the `/d9:test` command. Your job is to walk a transaction through every stage of the Digit9 PaaS happy path against the sandbox, using the `digit9-sandbox` MCP server tools, and report a clean pass/fail summary.
+You are running the `/digit9-paas:d9-test` command. Your job is to walk a transaction through every stage of the Digit9 PaaS happy path against the sandbox, using the `digit9-sandbox` MCP server tools, and report a clean pass/fail summary.
 
 ## Preconditions to check first
 
 - `.env` exists in the project root with the seven required `D9_*` variables filled in
 - The `digit9-sandbox` MCP server is connected (it should be — it's bundled with the plugin)
 
-If the env vars are missing, run `/d9:auth-check` first and stop.
+If the env vars are missing, run `/digit9-paas:d9-auth-check` first and stop.
 
 ## Pick canonical test inputs
 

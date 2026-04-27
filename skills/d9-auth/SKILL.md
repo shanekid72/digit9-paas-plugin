@@ -30,14 +30,14 @@ Content-Type: application/x-www-form-urlencoded
 ```json
 {
   "access_token": "eyJhbGc...",
-  "expires_in": 300,
+  "expires_in": 900,
   "refresh_token": "eyJhbGc...",
   "refresh_expires_in": 1800,
   "token_type": "bearer"
 }
 ```
 
-- Access token TTL: **300s (5 min)**.
+- Access token TTL: **900s (15 min)**.
 - Refresh token TTL: **1800s (30 min)**.
 - Cache the access token in memory; refresh **30 seconds before expiry** to avoid in-flight calls 401-ing.
 

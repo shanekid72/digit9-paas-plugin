@@ -19,8 +19,8 @@ Digit9 PaaS integration scaffolded by the `digit9-paas` Claude Code plugin.
    ```
 4. From a Claude Code session in the same folder:
    ```
-   /d9:auth-check
-   /d9:test
+   /digit9-paas:d9-auth-check
+   /digit9-paas:d9-test
    ```
 
 ## Layout

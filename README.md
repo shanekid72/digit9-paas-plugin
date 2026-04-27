@@ -30,10 +30,10 @@ claude plugin install https://plugins.digitnine.com/digit9-paas
 claude
 
 # Then in the Claude session:
-> /d9:scaffold
+> /digit9-paas:d9-scaffold
 ```
 
-`/d9:scaffold` will ask for your sandbox credentials, scaffold a project in your chosen language, drop in a tuned `CLAUDE.md`, and verify connectivity. After that you can just talk to Claude — the right skill loads when you need it.
+`/digit9-paas:d9-scaffold` will ask for your sandbox credentials, scaffold a project in your chosen language, drop in a tuned `CLAUDE.md`, and verify connectivity. After that you can just talk to Claude — the right skill loads when you need it.
 
 ## Sandbox credentials
 

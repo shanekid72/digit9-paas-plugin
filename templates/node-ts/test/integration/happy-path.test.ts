@@ -1,7 +1,7 @@
 /**
  * End-to-end sandbox test. Skipped if D9_* env vars are not present.
  *
- * Mirrors what `/d9:test` does, in code form. Useful in CI as a smoke test
+ * Mirrors what `/digit9-paas:d9-test` does, in code form. Useful in CI as a smoke test
  * (run nightly, not on every PR — real money paths).
  */
 

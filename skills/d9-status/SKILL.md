@@ -23,22 +23,25 @@ POST {D9_BASE_URL}/amr/paas/api/v1_0/paas/confirmtransaction
 { "transaction_ref_number": "1234567890123456" }
 ```
 
-**Response:**
+**Response** (envelope is `{status, status_code, data: {...}}`):
 
 ```json
 {
-  "state":     "IN_PROGRESS",
-  "sub_state": "READY_FOR_SETTLEMENT",
+  "status":      "success",
+  "status_code": 200,
   "data": {
-    "transaction_ref_number": "1234567890123456",
-    "confirmation_date":      "2026-04-27T10:19:01Z"
+    "transaction_ref_number": "5706126111718670",
+    "state":                  "IN_PROGRESS",
+    "sub_state":              "PAYMENT_SETTLED",
+    "agent_ref_number":       "5706126111718670",
+    "delivery_ref_number":    "5706126111718670"
   }
 }
 ```
 
 After confirm, the transaction is **irrevocable** in the sense that the partner has committed to settle. State will progress: `IN_PROGRESS` → `COMPLETED` (or `FAILED`) without further partner action. The partner's job is now to **observe**.
 
-`confirmTransaction` is idempotent on `transaction_ref_number` — calling it twice returns the same response and does not double-execute.
+`confirmtransaction` is idempotent on `transaction_ref_number` — calling it twice returns the same response and does not double-execute.
 
 **Errors:**
 
@@ -50,33 +53,83 @@ After confirm, the transaction is **irrevocable** in the sense that the partner 
 
 ```
 GET {D9_BASE_URL}/amr/paas/api/v1_0/paas/enquire-transaction
-       ?transaction_ref_number=1234567890123456
-       [&agent_transaction_ref_number=PARTNER_xxx]
+       ?transaction_ref_number=5706126111718670
 ```
 
-Either reference works (use `transaction_ref_number`; `agent_transaction_ref_number` is a fallback if the partner lost the system ID).
+The Postman collection only documents `transaction_ref_number` as the query parameter — the system-generated 16-char ID returned by `createtransaction`. Persist it the moment create returns, because there's no documented fallback lookup-by-customer-ref in the canonical collection.
 
-**Response (the fields that matter):**
+**Response — full shape from a real sandbox enquire** (envelope is `{status, status_code, data: {...}}`; `state`/`sub_state` live **inside** `data`):
 
 ```json
 {
-  "state":     "COMPLETED",
-  "sub_state": "PAID",
+  "status":      "success",
+  "status_code": 200,
   "data": {
-    "transaction_ref_number":      "1234567890123456",
-    "agent_transaction_ref_number":"PARTNER_xxx",
-    "transaction_date":            "2026-04-27T10:18:32Z",
-    "settlement_date":             "2026-04-27T10:23:14Z",
-    "fx_rates":          { "rate": "22.45000000", "...": "..." },
-    "fee_details":       [ "..." ],
-    "settlement_details":{ "settled_amount": { "value": "2238.00", "currency": "INR" } },
+    "state":             "IN_PROGRESS",
+    "sub_state":         "TXN_PREPARED",
+    "transaction_date":  "2026-04-27T17:44:05.761+04:00",
+    "transaction_gmt_date": "2026-04-27T13:44:05.761Z",
+    "type":              "SEND",
+    "instrument":        "REMITTANCE",
+    "source_of_income":  "SLRY",
+    "purpose_of_txn":    "SAVG",
+    "message":           "Agency transaction",
 
-    "bank_details":      { "clearing_status": "CLEARED" },        // BANK only
-    "cashpickup_details":{ "status": "PICKED_UP", "pickup_date": "2026-04-27T10:30:00Z" }, // CASHPICKUP only
-    "wallet_details":    { "topup_status": "CREDITED" }            // WALLET only
+    "sender": {
+      "agent_customer_id": "987612349876",
+      "customer_number":   "7842434024767283",
+      "first_name":        "GEORGE",
+      "last_name":         "MICHEAL",
+      "mobile_number":     "+971508359468",
+      "date_of_birth":     "1995-08-22",
+      "country_of_birth":  "IN",
+      "nationality":       "IN"
+    },
+
+    "receiver": {
+      "first_name":    "ANIJA FIRSTNAME",
+      "last_name":     "ANIJA LASTNAME",
+      "mobile_number": "+919586741500",
+      "nationality":   "IN",
+      "relation_code": "32",
+      "bank_details": {
+        "account_type":      "1",
+        "account_num":       "99345724439934",
+        "iso_code":          "FDRLINBBOPS",
+        "routing_code":      "FDRL0001033",
+        "account_category":  "UNDEFINED",
+        "transfer_mode":     "NEFT"
+      }
+    },
+
+    "transaction": {
+      "quote_id":                 "5706126111718670",
+      "transaction_ref_number":   "5706126111718670",
+      "agent_ref_number":         "5706126111718670",
+      "delivery_ref_number":      "5706126111718670",
+      "receiving_mode":           "BANK",
+      "payment_mode":             "AP",
+      "sending_country_code":     "AE",
+      "receiving_country_code":   "IN",
+      "sending_currency_code":    "AED",
+      "receiving_currency_code":  "INR",
+      "sending_amount":           100,
+      "receiving_amount":         2442.15,
+      "total_payin_amount":       107.35,
+      "tax_invoice_no":           "78410026000000005401",
+      "fx_rates":                 [ /* SELL rates both directions */ ],
+      "fee_details":              [ /* COMMISSION, TAX */ ],
+      "settlement_details":       [ /* values per charge_type */ ]
+    }
   }
 }
 ```
+
+**Field-name gotchas in the enquire response** (different from createtransaction):
+
+- `bank_details.account_num` (not `account_number`) and `bank_details.account_type` (not `account_type_code`).
+- `sender.agent_customer_id` (not `agent_customer_number`); a separate system-generated `customer_number` is also returned.
+- `state` and `sub_state` are inside `data` — the create-transaction response uses the same shape, but partners building DB schemas often miss this and end up storing nulls.
 
 ## State machine
 
@@ -95,19 +148,21 @@ ACCEPTED ─── (cancelTxn before confirm or before settlement) ──▶ CAN
 
 Terminal states: `COMPLETED`, `FAILED`, `CANCELLED`. Stop polling once you hit one.
 
-`sub_state` provides finer detail. Common ones:
+`sub_state` provides finer detail. The set below is what the sandbox actually returns on the AE→IN BANK happy path (verified end-to-end via `/digit9-paas:d9-test`); other corridors and error paths add more sub-states which Digit9 ops can enumerate on request.
 
-| state         | sub_state               | Meaning                                 |
-| ------------- | ----------------------- | --------------------------------------- |
-| INITIATED     | QUOTE_CREATED           | Quote created, transaction not yet     |
-| ACCEPTED      | TRANSACTION_CREATED     | createTxn returned, awaiting confirm   |
-| ACCEPTED      | READY_FOR_PICKUP        | (CASHPICKUP) created and ready         |
-| IN_PROGRESS   | READY_FOR_SETTLEMENT    | Confirmed, awaiting payout             |
-| IN_PROGRESS   | PAYOUT_INITIATED        | Funds dispatched to receiver bank/agent|
-| COMPLETED     | PAID                    | Funds delivered                        |
-| COMPLETED     | PICKED_UP               | (CASHPICKUP) collected by recipient    |
-| FAILED        | PAYMENT_FAILED          | Bank rejected; funds returned          |
-| CANCELLED     | REVERSAL_INITIATED      | Cancellation in progress               |
+| state         | sub_state               | Meaning                                            |
+| ------------- | ----------------------- | -------------------------------------------------- |
+| INITIATED     | QUOTE_CREATED           | Quote created, transaction not yet                 |
+| ACCEPTED      | ORDER_ACCEPTED          | createtransaction returned, awaiting confirm       |
+| IN_PROGRESS   | PAYMENT_SETTLED         | confirmtransaction acknowledged the commitment     |
+| IN_PROGRESS   | TXN_PREPARED            | Backend handoff complete, awaiting payout rail     |
+| IN_PROGRESS   | PAYOUT_INITIATED        | Funds dispatched to receiver bank/agent            |
+| COMPLETED     | PAID                    | Funds delivered (BANK)                             |
+| COMPLETED     | PICKED_UP               | (CASHPICKUP) collected by recipient                |
+| FAILED        | PAYMENT_FAILED          | Bank rejected; funds returned                      |
+| CANCELLED     | REVERSAL_INITIATED      | Cancellation in progress                           |
+
+**Don't hard-code the sub_state list as an exhaustive enum** — Digit9 occasionally adds new sub-states on the IN_PROGRESS path. Drive logic off `state`; treat unknown `sub_state` as opaque-but-loggable.
 
 ## Polling cadence
 
@@ -146,31 +201,34 @@ import { D9Client } from './client';
 export type State = 'INITIATED' | 'ACCEPTED' | 'IN_PROGRESS' | 'COMPLETED' | 'FAILED' | 'CANCELLED';
 const TERMINAL: ReadonlySet<State> = new Set(['COMPLETED', 'FAILED', 'CANCELLED']);
 
+// Digit9 wraps every response in {status, status_code, data: {...}}.
+// Helpers below unwrap so callers see the inner data directly.
+async function unwrap<T>(p: Promise<{ data: { data: T } }>): Promise<T> {
+  return (await p).data.data;
+}
+
 export async function confirmTransaction(d9: D9Client, txnRef: string) {
-  const { data } = await d9.request<any>({
+  return unwrap<any>(d9.request({
     method: 'POST',
     url:    '/amr/paas/api/v1_0/paas/confirmtransaction',
     data:   { transaction_ref_number: txnRef },
-  });
-  return data;
+  }));
 }
 
 export async function enquireTransaction(d9: D9Client, txnRef: string) {
-  const { data } = await d9.request<any>({
+  return unwrap<any>(d9.request({
     method: 'GET',
     url:    '/amr/paas/api/v1_0/paas/enquire-transaction',
     params: { transaction_ref_number: txnRef },
-  });
-  return data;
+  }));
 }
 
 export async function cancelTransaction(d9: D9Client, txnRef: string, reason: string, remarks?: string) {
-  const { data } = await d9.request<any>({
+  return unwrap<any>(d9.request({
     method: 'POST',
     url:    '/amr/paas/api/v1_0/paas/canceltransaction',
     data:   { transaction_ref_number: txnRef, cancel_reason: reason, remarks },
-  });
-  return data;
+  }));
 }
 
 export async function pollUntilTerminal(
@@ -229,7 +287,9 @@ public class StatusService {
         try { Thread.sleep(5_000); } catch (InterruptedException e) { Thread.currentThread().interrupt(); }
         while (Duration.between(start, Instant.now()).toMinutes() < 30) {
             var r = enquire(txnRef);
-            if (TERMINAL.contains(r.state())) return r;
+            // EnquireResponse maps the {status, status_code, data: {state, ...}} envelope —
+            // state lives on r.data(), not r itself.
+            if (TERMINAL.contains(r.data().state())) return r;
             var ms = Duration.between(start, Instant.now()).toMillis() < 120_000 ? 10_000L : 30_000L;
             try { Thread.sleep(ms); } catch (InterruptedException e) { Thread.currentThread().interrupt(); break; }
         }

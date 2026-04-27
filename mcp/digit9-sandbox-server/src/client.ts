@@ -137,12 +137,34 @@ export class D9SandboxError extends Error {
 function normalizeAxiosError(e: unknown): Error {
   const ax = e as AxiosError<any>;
   if (ax.response) {
-    const code = ax.response.data?.code ?? ax.response.data?.error ?? String(ax.response.status);
-    const msg  = ax.response.data?.message ?? ax.response.statusText;
-    return new D9SandboxError(`Digit9 ${code}: ${msg}`, ax.response.status, String(code), ax.response.data);
+    const body = ax.response.data;
+    // Digit9 sandbox error envelope: { status, status_code, error_code, message, details?, errors? }
+    const code = body?.error_code ?? body?.code ?? body?.error ?? String(ax.response.status);
+    const msg  = body?.message ?? ax.response.statusText;
+
+    // Surface field-level reasons. `details` is a map { "sender.sender_id[0].valid_through": "..." };
+    // `errors` is sometimes an array. Either way, callers must see them — the generic message alone
+    // (e.g. "Payload parameter is missing or corrupt") is not actionable.
+    const reasonsBlob = formatReasons(body?.details) ?? formatReasons(body?.errors);
+    const fullMsg = reasonsBlob ? `Digit9 ${code}: ${msg} — ${reasonsBlob}` : `Digit9 ${code}: ${msg}`;
+
+    return new D9SandboxError(fullMsg, ax.response.status, String(code), body);
   }
   if (ax.code === 'ECONNABORTED') return new D9SandboxError('Digit9 sandbox timeout');
   return e instanceof Error ? e : new Error(String(e));
+}
+
+function formatReasons(blob: unknown): string | null {
+  if (!blob) return null;
+  if (Array.isArray(blob)) {
+    return blob.map((e) => (typeof e === 'string' ? e : JSON.stringify(e))).join('; ');
+  }
+  if (typeof blob === 'object') {
+    const entries = Object.entries(blob as Record<string, unknown>);
+    if (entries.length === 0) return null;
+    return entries.map(([k, v]) => `${k}: ${typeof v === 'string' ? v : JSON.stringify(v)}`).join('; ');
+  }
+  return String(blob);
 }
 
 // Module-level singleton — MCP servers are short-lived processes, this is fine.

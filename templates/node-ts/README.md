@@ -17,11 +17,11 @@ Digit9 PaaS integration scaffolded by the `digit9-paas` Claude Code plugin.
    ```bash
    npm run dev
    # In Claude:
-   /d9:auth-check
+   /digit9-paas:d9-auth-check
    ```
 4. Run the end-to-end happy path:
    ```bash
-   /d9:test
+   /digit9-paas:d9-test
    ```
 
 ## Layout

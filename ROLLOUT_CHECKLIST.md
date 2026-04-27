@@ -146,7 +146,7 @@ claude plugin install git+https://github.com/<YOUR_ORG>/digit9-paas-plugin.git
 ### Step 3.3 — Verify the plugin registered
 
 - [ ] Run `claude` in the test folder.
-- [ ] Inside the Claude session, type `/help` and look for `/d9:scaffold`, `/d9:test`, `/d9:validate`, `/d9:auth-check`.
+- [ ] Inside the Claude session, type `/help` and look for `/digit9-paas:d9-scaffold`, `/digit9-paas:d9-test`, `/digit9-paas:d9-validate`, `/digit9-paas:d9-auth-check`.
 - [ ] If the four `d9:*` commands are listed, the plugin is installed.
 
 ### Step 3.4 — Test auth before scaffolding
@@ -154,7 +154,7 @@ claude plugin install git+https://github.com/<YOUR_ORG>/digit9-paas-plugin.git
 - [ ] In the Claude session, run:
 
 ```
-/d9:auth-check
+/digit9-paas:d9-auth-check
 ```
 
 - [ ] You'll be prompted for sandbox credentials, or you may need to set them in env first.
@@ -172,7 +172,7 @@ D9_COMPANY=<your company code>
 D9_BRANCH=<your branch code>
 ```
 
-- [ ] Re-run `/d9:auth-check`.
+- [ ] Re-run `/digit9-paas:d9-auth-check`.
 - [ ] **Expected:** "Sandbox auth OK" with token expiry info. If yes, your credentials are good and the MCP server is talking to the sandbox.
 
 ### Step 3.5 — Run the scaffold
@@ -180,7 +180,7 @@ D9_BRANCH=<your branch code>
 - [ ] In the Claude session:
 
 ```
-/d9:scaffold
+/digit9-paas:d9-scaffold
 ```
 
 - [ ] Pick **Node/TS** (faster to test than Java).
@@ -206,12 +206,12 @@ npm run dev
 - [ ] Back in the Claude session, run:
 
 ```
-/d9:test
+/digit9-paas:d9-test
 ```
 
 - [ ] **Expected:** ✓ at every stage — auth, corridors, banks, quote, createTxn, confirmTxn, enquire (4x), webhook simulation. Total ~30–60 seconds.
 
-**Success criteria:** all-green output from `/d9:test`. A real transaction was created, confirmed, and reached terminal state in your sandbox.
+**Success criteria:** all-green output from `/digit9-paas:d9-test`. A real transaction was created, confirmed, and reached terminal state in your sandbox.
 
 **If it fails at a specific step:**
 - Auth → re-check `.env` values for typos.
@@ -241,9 +241,9 @@ npm run dev
 - [ ] Delete `D:\Projects\d9-plugin-test\` entirely.
 - [ ] Recreate it.
 - [ ] `claude plugin update digit9-paas` (or uninstall + reinstall if update misbehaves).
-- [ ] Run `/d9:scaffold` and `/d9:test` again.
+- [ ] Run `/digit9-paas:d9-scaffold` and `/digit9-paas:d9-test` again.
 
-**Success criteria:** `/d9:scaffold` to `/d9:test` runs clean from a fresh folder with zero manual fixes.
+**Success criteria:** `/digit9-paas:d9-scaffold` to `/digit9-paas:d9-test` runs clean from a fresh folder with zero manual fixes.
 
 ---
 
@@ -271,7 +271,7 @@ Claude Code, install with:
 
   claude plugin install git+https://github.com/<YOUR_ORG>/digit9-paas-plugin.git
 
-Then run `/d9:scaffold` to get a starter project. The plugin guides you through
+Then run `/digit9-paas:d9-scaffold` to get a starter project. The plugin guides you through
 the integration end-to-end against the sandbox.
 
 If you don't use Claude Code, no problem — the docs at developer.digitnine.com
@@ -336,8 +336,8 @@ claude plugin install https://plugins.digitnine.com/digit9-paas
 
 Likely additions:
 - [ ] Skills for the other products (UPaaS, EWA, WPS) — each as a separate skill folder, or a separate plugin.
-- [ ] A `/d9:upgrade` command that helps partners migrate when API versions change.
-- [ ] A `/d9:dashboard` artifact that shows live transaction stats from the partner's own DB.
+- [ ] A `/digit9-paas:d9-upgrade` command that helps partners migrate when API versions change.
+- [ ] A `/digit9-paas:d9-dashboard` artifact that shows live transaction stats from the partner's own DB.
 
 **Success criteria:** plugin shipped publicly, partners using it without your hands-on guidance.
 
@@ -352,7 +352,7 @@ Likely additions:
 | Uninstall (e.g. to reinstall fresh)                   | `claude plugin uninstall digit9-paas`                            |
 | List installed plugins                                | `claude plugin list`                                             |
 | Build the MCP server                                  | `cd mcp/digit9-sandbox-server && npm install && npm run build`   |
-| Test auth                                             | (in claude) `/d9:auth-check`                                     |
-| Scaffold a new partner project                        | (in claude, in empty folder) `/d9:scaffold`                      |
-| Run end-to-end happy path against sandbox             | (in claude, in scaffolded folder) `/d9:test`                     |
-| Review existing partner code for anti-patterns        | (in claude) `/d9:validate`                                       |
+| Test auth                                             | (in claude) `/digit9-paas:d9-auth-check`                                     |
+| Scaffold a new partner project                        | (in claude, in empty folder) `/digit9-paas:d9-scaffold`                      |
+| Run end-to-end happy path against sandbox             | (in claude, in scaffolded folder) `/digit9-paas:d9-test`                     |
+| Review existing partner code for anti-patterns        | (in claude) `/digit9-paas:d9-validate`                                       |

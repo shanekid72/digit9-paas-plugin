@@ -2,7 +2,7 @@
 description: Bootstrap a new Digit9 PaaS partner integration project — picks a language, scaffolds boilerplate, wires up sandbox credentials, and verifies connectivity.
 ---
 
-You are running the `/d9:scaffold` command for a partner about to integrate with Digit9 PaaS. Your job is to bootstrap their project so they can start writing business logic, not boilerplate.
+You are running the `/digit9-paas:d9-scaffold` command for a partner about to integrate with Digit9 PaaS. Your job is to bootstrap their project so they can start writing business logic, not boilerplate.
 
 ## Step 1 — Confirm we're in the right place
 
@@ -55,7 +55,7 @@ Drop the rendered `CLAUDE.md.template` into the project root as `CLAUDE.md`.
 
 ## Step 5 — Verify
 
-Run `/d9:auth-check` automatically. Report success/failure clearly. If it fails:
+Run `/digit9-paas:d9-auth-check` automatically. Report success/failure clearly. If it fails:
 
 - 401 invalid_grant → wrong username/password; ask them to recheck
 - 401 invalid_client → wrong client_secret
@@ -65,7 +65,7 @@ Do not declare scaffolding "done" until auth-check passes. A scaffold that can't
 
 ## Step 6 — Report and hand off
 
-Report what was created (file count, key files), what the next sensible step is (e.g. "try `/d9:test` for an end-to-end run, or just ask Claude to add an API endpoint that calls quote"), and remind the partner of the four required env vars they shouldn't commit.
+Report what was created (file count, key files), what the next sensible step is (e.g. "try `/digit9-paas:d9-test` for an end-to-end run, or just ask Claude to add an API endpoint that calls quote"), and remind the partner of the four required env vars they shouldn't commit.
 
 ## Failure modes to handle gracefully
 

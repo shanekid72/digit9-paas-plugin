@@ -1,187 +1,260 @@
 ---
 name: d9-transaction
-description: Create a Digit9 PaaS remittance transaction from a quote. Triggers on createTransaction, transaction creation, sender object, receiver object, C2C vs B2B, service_type, agent_transaction_ref_number, transaction_ref_number, account_type_code, IBAN, UBO (Ultimate Beneficial Owner), 806500 UNPROCESSABLE_ENTITY, sender_id, receiver_id, source_of_income, purpose_of_txn, or any field-level error from a transaction submission. The most error-prone endpoint in the API.
+description: Create a Digit9 PaaS remittance transaction from a quote. Triggers on createTransaction, transaction creation, sender object, receiver object, C2C vs B2B, service_type, agent_customer_number, transaction_ref_number, account_type_code, IBAN, UBO (Ultimate Beneficial Owner), 806500 UNPROCESSABLE_ENTITY, sender_id, receiver_id, source_of_income, purpose_of_txn, or any field-level error from a transaction submission. The most error-prone endpoint in the API.
 ---
 
 # Digit9 PaaS — Create Transaction
 
-`createTransaction` is the most error-prone endpoint in the PaaS surface. It accepts ~30 fields organized into three sub-objects (sender, receiver, transaction), the shapes of which vary by **service type** (C2C/B2B) and **receiving mode** (BANK/CASHPICKUP/WALLET). Get any of it wrong and you get `806500 UNPROCESSABLE_ENTITY` with a field-level reason. Get the corridor wrong and you get `40004 NOT_FOUND` because your quote expired.
+`createTransaction` is the most error-prone endpoint in the PaaS surface. It accepts a top-level body with sender + receiver + transaction sub-objects, the receiver shape varying by **receiving country**. Get any of it wrong and the sandbox returns `40000` with a `details` map naming the bad field. Get the corridor wrong (or wait too long) and you get `40004 NOT_FOUND` because your quote expired.
 
-This skill is the canonical reference for getting it right the first time.
+This skill is the canonical reference. The shapes here are taken verbatim from the PAASTestAgent Postman collection that Digit9 ships with onboarding (`DPS - PAASTestAgent.postman_collection.json`) — when this skill and the collection disagree, the collection wins.
 
 ## Endpoint
 
 ```
 POST {D9_BASE_URL}/amr/paas/api/v1_0/paas/createtransaction
 Authorization: Bearer <token>
-sender / channel / company / branch  (the four context headers)
+sender / channel / company / branch  (the four context headers — see d9-auth)
 Content-Type: application/json
 ```
 
 ## Top-level request shape
 
+`type`, `instrument`, `source_of_income`, `purpose_of_txn`, and `message` live at the **top level** — not nested inside `transaction`. The `transaction` object only carries `quote_id`.
+
 ```json
 {
-  "quote_id":      "q_38f1a2c5...",
-  "service_type":  "C2C",                          // or "B2B"
-  "agent_transaction_ref_number": "PARTNER_<UUID>", // your idempotency key
-  "sender":   { /* shape depends on service_type */ },
-  "receiver": { /* shape depends on receiving_mode */ },
+  "type":             "SEND",
+  "instrument":       "REMITTANCE",
+  "source_of_income": "SLRY",
+  "purpose_of_txn":   "SAVG",
+  "message":          "Agency transaction",
+  "sender":           { /* see "Sender object" */ },
+  "receiver":         { /* see "Receiver object — varies by receiving country" */ },
   "transaction": {
-    "source_of_income": "SLRY",                    // SLRY/BUSN/INVM/...
-    "purpose_of_txn":   "SUPP",                    // SUPP/EDUC/SAVG/...
-    "proofs": [ /* B2B only, conditional */ ]
+    "quote_id": "5706126111718670"
   }
 }
 ```
 
-## Sender object — varies by `service_type`
+There is **no top-level `service_type`** field and **no `agent_transaction_ref_number`** in the canonical happy-path body. Idempotency is keyed off `agent_customer_number` on the sender (your stable customer ID), and Digit9 derives the rest from the quote.
 
-### C2C (Consumer-to-Consumer)
+## Sender object
+
+The Postman collection shows one sender shape across all corridors — keyed off `agent_customer_number`. Use this for the standard agency transaction:
 
 ```json
 {
-  "first_name":         "John",
-  "last_name":          "Smith",
-  "mobile_number":      "+971501234567",
-  "nationality":        "AE",
-  "date_of_birth":      "1985-04-15",
-  "country_of_birth":   "GB",
+  "agent_customer_number": "987612349876",
+  "mobile_number":         "+971508359468",
+  "first_name":            "George",
+  "last_name":             "Micheal",
+  "date_of_birth":         "1995-08-22",
+  "country_of_birth":      "IN",
+  "nationality":           "IN",
   "sender_id": [
-    { "id_code": "PASSPORT", "id_number": "GB1234567", "issue_date": "2019-01-01", "expiry_date": "2029-01-01", "issued_country": "GB" }
+    {
+      "id_code":       "4",
+      "id":            "784199191427626",
+      "issued_on":     "2022-10-31",
+      "valid_through": "2030-11-01"
+    }
   ],
   "sender_address": [
-    { "address_type": "RES", "address_line": "Apt 4B, Marina Plaza", "city": "Dubai", "postal_code": "00000", "country_code": "AE" }
+    {
+      "address_type": "PRESENT",
+      "address_line": "Sheikh Zayed Road, Tower 3",
+      "post_code":    "710",
+      "town_name":    "DUBAI",
+      "country_code": "AE"
+    }
   ]
 }
 ```
 
-### B2B (Business-to-Business)
+**Sender field rules — the ones that bite:**
+
+- `agent_customer_number` is your stable identifier for this sender — persist it, reuse it across that customer's future transactions. It's how Digit9 matches repeat senders for monitoring and limits.
+- `sender_id[].id_code` is **numeric**, not a string label. The Postman examples use `"4"` (Emirates ID, 15-digit ID number) for AE-origin senders and `"15"` for senders using a different government-issued ID. Get the full `id_code` enum via `GET /amr/paas/api/v1_0/paas/codes?code=id_types`.
+- `sender_id[].id` (the actual ID number) is named `id`, **not** `id_number`.
+- Date fields are `issued_on` / `valid_through` (`YYYY-MM-DD`), **not** `issue_date` / `expiry_date`. `valid_through` must be in the future or today — past dates fail with `40000`.
+- `sender_address[].address_type` is `"PRESENT"` (current) or `"PERMANENT"` — not `"RES"` / `"BIZ"`.
+- Postal code is `post_code`, city is `town_name` — not `postal_code` / `city`.
+
+### B2B sender
+
+The PAASTestAgent Postman collection does **not** include a B2B example — every transaction in it uses the consumer-style sender above. If your tenant is configured for B2B (legal entity sender + UBO list), ask Digit9 ops for the canonical B2B body shape rather than guessing. The names sometimes cited in older docs (`name`, `type_of_business`, `country_of_incorporation`, `sender_ubos[]`, plus a `TRN` in `sender_id`) **are not verified against the current sandbox** — confirm against a current Postman example before shipping.
+
+## Receiver object — varies by receiving country
+
+The shape is keyed off the **receiving country**, which is baked into the quote. The Postman collection ships three concrete examples (IN, PK, BD), all `receiving_mode: "BANK"`. Use the matching one.
+
+### IN — bank transfer (NEFT/IMPS, IFSC routing)
 
 ```json
 {
-  "agent_customer_number":   "PARTNER_BIZ_42",
-  "name":                    "Acme Trading LLC",
-  "type_of_business":        "TRADING",
-  "country_of_incorporation":"AE",
-  "phone_number":            "+97142345678",
-  "sender_id": [
-    { "id_code": "TRN", "id_number": "100123456700003", "issue_date": "2018-01-01", "issued_country": "AE" }
-  ],
-  "sender_address": [
-    { "address_type": "BIZ", "address_line": "Plot 12, JAFZA", "city": "Dubai", "country_code": "AE" }
-  ],
-  "sender_ubos": [
-    { "first_name": "Jane", "last_name": "Doe", "designation": "DIRECTOR", "ownership_pct": 60, "nationality": "AE" }
-  ]
-}
-```
-
-**B2B-specific rules:**
-
-- `name` (legal entity name) replaces `first_name`/`last_name`. Don't send both.
-- `sender_ubos` array is required for B2B. Each UBO with ≥25% ownership must be listed (regulatory threshold — confirm with your compliance team).
-- `proofs` array (incorporation cert, board resolution) may be required by your tenant — check with Digit9 ops if `806500` says "missing proofs."
-
-Mismatched shape (e.g. C2C body in a B2B service_type, or vice versa) → `806500 UNPROCESSABLE_ENTITY`.
-
-## Receiver object — varies by `receiving_mode`
-
-The mode is set on the *quote*; the receiver shape on `createTransaction` must match. Use the cheat sheet in `d9-master-data` to validate before submission.
-
-### BANK
-
-```json
-{
-  "first_name":   "Priya",
-  "last_name":    "Sharma",
-  "mobile_number":"+919812345678",
-  "nationality":  "IN",
-  "relation_code":"FRND",
-  "receiver_id":  [ { "id_code": "AADHAAR", "id_number": "1234-5678-9012", "issued_country": "IN" } ],
+  "first_name":     "Anija FirstName",
+  "last_name":      "Anija Lastname",
+  "mobile_number":  "+919586741500",
+  "date_of_birth":  "1990-08-22",
+  "gender":         "F",
+  "nationality":    "IN",
+  "relation_code":  "32",
   "receiver_address": [
-    { "address_type": "RES", "address_line": "12 MG Road", "city": "Mumbai", "postal_code": "400001", "country_code": "IN" }
+    {
+      "address_type": "PRESENT",
+      "address_line": "12 MG Road",
+      "town_name":    "THRISSUR",
+      "country_code": "IN"
+    }
   ],
   "bank_details": {
-    "bank_id":           "IN_HDFC0000001",   // from masters
-    "iso_code":          "HDFCINBB",         // from masters
-    "branch_id":         "HDFC0000001",      // for BD/NP/LK
-    "account_number":    "12345678901234",
-    "account_type_code": "01",               // ← REQUIRED for non-PK
-    "iban":              null                // ← REQUIRED for PK only
+    "account_type_code": "1",
+    "routing_code":      "FDRL0001033",
+    "account_number":    "99345724439934"
   }
 }
 ```
 
-**BANK rules — the ones that bite:**
+- `routing_code` is the **IFSC**. No `iso_code`, no `bank_id`.
+- `account_type_code` is numeric-as-string (`"1"` = savings; full enum via `/paas/codes?code=account_types`).
 
-- `account_type_code` is **mandatory** for non-PK BANK transfers. Sourced from `bank.account_types[]` via `d9-master-data`. The recent fix in `D9-DEV-PORTAL` (commit `cf0089b`) was specifically partners forgetting this for IN/BD/PH/AE/LK/NP.
-- For Pakistan (`receiving_country_code: "PK"`), use `iban` instead of `account_number`. Format: `PK<2-digit check><24-char ID>`.
-- `branch_id` is mandatory for Bangladesh, Nepal, Sri Lanka. Lookup via `/raas/masters/v1/banks/{bank_id}/branches`.
-
-### CASHPICKUP
+### PK — bank transfer (IBAN routing)
 
 ```json
 {
-  "first_name": "...",  "last_name": "...",  "mobile_number": "...",
-  "nationality": "...", "relation_code": "...", "receiver_id": [...], "receiver_address": [...],
-  "cashpickup_details": {
-    "correspondent":             "RIA",
-    "correspondent_id":          "RIA_001",
-    "correspondent_location_id": "RIA_MUMBAI_001"
+  "first_name":    "Anija FirstName",
+  "last_name":     "Anija Lastname",
+  "mobile_number": "+923001234567",
+  "date_of_birth": "1990-08-22",
+  "gender":        "F",
+  "nationality":   "PK",
+  "relation_code": "32",
+  "receiver_address": [
+    {
+      "address_type": "PRESENT",
+      "address_line": "Block 5, F-7",
+      "town_name":    "ISLAMABAD",
+      "country_code": "PK"
+    }
+  ],
+  "bank_details": {
+    "account_type_code": "1",
+    "iso_code":          "ALFHPKKAXXX",
+    "iban":              "PK12ABCD1234567891234567"
   }
 }
 ```
 
-Correspondent IDs come from a separate masters lookup — your Digit9 integration manager will share the supported list per country.
+- PK uses **`iban`** (24 chars after the `PK<2-digit-check>`) — **not** `account_number`.
+- Routing is via **`iso_code`** (the SWIFT/BIC) — no `routing_code`.
 
-### WALLET
+### BD — bank transfer (SWIFT routing + account number)
 
 ```json
 {
-  "first_name": "...",  "last_name": "...",  "mobile_number": "...",
-  "nationality": "...", "relation_code": "...", "receiver_id": [...], "receiver_address": [...],
-  "wallet_details": { "wallet_id": "PHL_GCASH_+639171234567" }
+  "first_name":    "Anija FirstName",
+  "last_name":     "Anija Lastname",
+  "mobile_number": "+8801712345678",
+  "date_of_birth": "1990-08-22",
+  "gender":        "F",
+  "nationality":   "BD",
+  "relation_code": "32",
+  "receiver_address": [
+    {
+      "address_type": "PRESENT",
+      "address_line": "House 12, Road 4, Dhanmondi",
+      "town_name":    "DHAKA",
+      "country_code": "BD"
+    }
+  ],
+  "bank_details": {
+    "account_type_code": "1",
+    "iso_code":          "ABBLBDDH201",
+    "account_number":    "9934572443993487"
+  }
 }
 ```
+
+- BD uses **`iso_code`** (SWIFT, often with a 3-digit branch suffix like `ABBLBDDH201`) **plus** `account_number`. No `routing_code`, no `iban`.
+
+### Cheat sheet — receiver bank routing per country
+
+| Country | `routing_code` | `iso_code` | `account_number` | `iban` |
+| ------- | -------------- | ---------- | ---------------- | ------ |
+| IN      | ✓ (IFSC)       | —          | ✓                | —      |
+| PK      | —              | ✓ (SWIFT)  | —                | ✓      |
+| BD      | —              | ✓ (SWIFT)  | ✓                | —      |
+| Others  | confirm with Digit9 ops; the collection has no example | | | |
+
+`relation_code` is numeric (e.g. `"32"` = friend, `"01"` = spouse — verify enum via `/paas/codes?code=relations`).
+
+### CASHPICKUP and WALLET
+
+The PAASTestAgent collection has **no CASHPICKUP or WALLET examples**. Older docs name `cashpickup_details.{correspondent, correspondent_id, correspondent_location_id}` and `wallet_details.{wallet_id}`, but those shapes are **not verified against the current sandbox**. If your tenant supports cash pickup or wallet payout, ask Digit9 ops for a current Postman example before implementing — don't guess from generic docs.
 
 ## Idempotency
 
-`agent_transaction_ref_number` is **your** idempotency key. Pass the same value on retry → same response, no duplicate transaction. Generate it once when the user clicks "Confirm" and persist it in your DB *before* calling `createTransaction`. If you get a network timeout, retry with the same value — safe.
+Idempotency is keyed off `sender.agent_customer_number` plus the `quote_id`. Calling `createtransaction` a second time with the same `agent_customer_number` against the same `quote_id` returns the existing transaction (same `transaction_ref_number`). On a network timeout, retry with the same body — safe.
 
-The system-generated `transaction_ref_number` (16 chars, in the response) is the canonical ID for *everything afterward* — confirm, enquire, cancel, webhook reconciliation. Store both: your ref for idempotency, theirs for queries.
+The system-generated `transaction_ref_number` (16 chars, in the response) is the canonical ID for **everything afterward** — confirm, enquire, cancel, webhook reconciliation. Persist both: your `agent_customer_number` (for replay matching) and theirs (for queries).
 
 ## Response
 
-Success:
+Success — note `state: "ACCEPTED"`, `sub_state: "ORDER_ACCEPTED"`:
 
 ```json
 {
-  "state":     "ACCEPTED",
-  "sub_state": "TRANSACTION_CREATED",
+  "status":      "success",
+  "status_code": 200,
   "data": {
-    "transaction_ref_number":      "1234567890123456",
-    "agent_transaction_ref_number":"PARTNER_<UUID>",
-    "transaction_date":            "2026-04-27T10:18:32Z",
-    "expires_at":                  "2026-04-29T10:18:32Z",
-    "fx_rates":          { "...": "..." },
-    "fee_details":       [ "..." ],
-    "settlement_details":{ "...": "..." }
+    "state":     "ACCEPTED",
+    "sub_state": "ORDER_ACCEPTED",
+    "transaction_ref_number":   "5706126111718670",
+    "agent_ref_number":         "5706126111718670",
+    "delivery_ref_number":      "5706126111718670",
+    "transaction_date":         "2026-04-27T17:44:05.761+04:00",
+    "expires_at":               "2026-04-27T19:44:05.761+04:00",
+    "receiving_country_code":   "IN",
+    "receiving_currency_code":  "INR",
+    "sending_country_code":     "AE",
+    "sending_currency_code":    "AED",
+    "sending_amount":           100,
+    "receiving_amount":         2442.15,
+    "total_payin_amount":       107.35,
+    "transfer_mode":            "NEFT",
+    "fx_rates":                 [ /* SELL rates both directions */ ],
+    "fee_details":              [ /* COMMISSION, TAX, ... */ ],
+    "settlement_details":       [ /* values per charge_type */ ]
   }
 }
 ```
 
-The transaction is **created but not committed** — the partner must call `confirmTransaction` to actually send funds (see `d9-status`). The transaction expires (typically 24–48h) if not confirmed.
+The transaction is **created and reserved** but **not committed** — the partner must call `confirmtransaction` to actually move funds (see `d9-status`). The transaction expires at `expires_at` (typically ~2h from create) if not confirmed.
 
 ## Errors you'll see
 
+The sandbox wraps every error in this envelope:
+
+```json
+{
+  "status":      "failure",
+  "status_code": 400,
+  "error_code":  40000,
+  "message":     "Payload parameter is missing or corrupt",
+  "details":     { "sender.sender_id[0].valid_through": "Invalid value, must be in the future or the present" }
+}
+```
+
+**`details` is where the actionable info lives.** A wrapper that drops it (or surfaces only `message`) will hide the real reason behind a generic-looking 400 — always log and surface `details`.
+
 | Code   | Meaning                                                    | What to do                                              |
 | ------ | ---------------------------------------------------------- | ------------------------------------------------------- |
-| 806500 | UNPROCESSABLE_ENTITY — field-level validation failure      | Read the `errors[]` in body; surface to user            |
-| 806600 | Business validation (e.g. KYC mismatch, sanctions hit)     | Surface generic "transaction blocked"; do not retry     |
+| 40000  | Field-level validation failed, OR missing context headers  | Read `details` map; surface to user                     |
+| 806500 | UNPROCESSABLE_ENTITY (business validation, e.g. limit)     | Read `errors[]` if present; surface generic reject      |
+| 806600 | Compliance reject (KYC mismatch, sanctions hit)            | Surface generic "transaction blocked"; do not retry     |
 | 40004  | NOT_FOUND — usually a stale `quote_id`                     | Re-quote (see `d9-quote`); never silently retry         |
 | 40001  | UNAUTHORIZED — token expired                               | Refresh token; auth interceptor should handle this      |
-| 40000  | BAD_REQUEST — missing context headers                      | Check `sender`/`channel`/`company`/`branch` are set     |
 | 50000  | INTERNAL_SERVICE_ERROR                                     | Retry with backoff; if persistent, alert ops            |
 
 ## Canonical implementation
@@ -191,25 +264,64 @@ The transaction is **created but not committed** — the partner must call `conf
 ```ts
 // src/d9/transaction.ts
 import { D9Client } from './client';
-import { v4 as uuid } from 'uuid';
 import { isQuoteExpired, Quote } from './quote';
 
-export type ServiceType = 'C2C' | 'B2B';
+export interface SenderId {
+  id_code:       string;     // numeric-as-string, from /paas/codes?code=id_types
+  id:            string;
+  issued_on:     string;     // YYYY-MM-DD
+  valid_through: string;     // YYYY-MM-DD, must be today or later
+}
+
+export interface Address {
+  address_type: 'PRESENT' | 'PERMANENT';
+  address_line: string;
+  post_code:    string;
+  town_name:    string;
+  country_code: string;
+}
+
+export interface Sender {
+  agent_customer_number: string;
+  mobile_number:         string;
+  first_name:            string;
+  last_name:             string;
+  date_of_birth:         string;     // YYYY-MM-DD
+  country_of_birth:      string;
+  nationality:           string;
+  sender_id:             SenderId[];
+  sender_address:        Address[];
+}
+
+export type ReceiverBankIN = { account_type_code: string; routing_code: string; account_number: string };
+export type ReceiverBankPK = { account_type_code: string; iso_code: string; iban: string };
+export type ReceiverBankBD = { account_type_code: string; iso_code: string; account_number: string };
+
+export interface Receiver {
+  first_name:       string;
+  last_name:        string;
+  mobile_number:    string;
+  date_of_birth:    string;
+  gender:           'M' | 'F';
+  nationality:      string;
+  relation_code:    string;             // from /paas/codes?code=relations
+  receiver_address: Address[];
+  bank_details:     ReceiverBankIN | ReceiverBankPK | ReceiverBankBD;
+}
 
 export interface CreateTxnInput {
-  quote: Quote;
-  serviceType: ServiceType;
-  sender: SenderC2C | SenderB2B;
-  receiver: ReceiverBank | ReceiverCashPickup | ReceiverWallet;
-  sourceOfIncome: string;     // e.g. "SLRY"
-  purposeOfTxn:   string;     // e.g. "SUPP"
+  quote:          Quote;
+  sender:         Sender;
+  receiver:       Receiver;
+  sourceOfIncome: string;       // e.g. "SLRY"
+  purposeOfTxn:   string;       // e.g. "SAVG"
+  message?:       string;       // free-text, defaults to "Agency transaction"
 }
 
 export interface Transaction {
-  transactionRefNumber:      string;
-  agentTransactionRefNumber: string;
-  expiresAt:                 Date;
-  raw:                       unknown;
+  transactionRefNumber: string;
+  expiresAt:            Date;
+  raw:                  unknown;
 }
 
 export async function createTransaction(d9: D9Client, input: CreateTxnInput): Promise<Transaction> {
@@ -217,18 +329,15 @@ export async function createTransaction(d9: D9Client, input: CreateTxnInput): Pr
     throw new Error('Quote expired before createTransaction; re-quote required.');
   }
 
-  const agentRef = `PARTNER_${uuid()}`;
-
   const body = {
-    quote_id:                      input.quote.quoteId,
-    service_type:                  input.serviceType,
-    agent_transaction_ref_number:  agentRef,
-    sender:                        input.sender,    // already shaped per service_type
-    receiver:                      input.receiver,  // already shaped per receiving_mode
-    transaction: {
-      source_of_income: input.sourceOfIncome,
-      purpose_of_txn:   input.purposeOfTxn,
-    },
+    type:             'SEND',
+    instrument:       'REMITTANCE',
+    source_of_income: input.sourceOfIncome,
+    purpose_of_txn:   input.purposeOfTxn,
+    message:          input.message ?? 'Agency transaction',
+    sender:           input.sender,
+    receiver:         input.receiver,
+    transaction:      { quote_id: input.quote.quoteId },
   };
 
   const { data } = await d9.request<any>({
@@ -237,15 +346,14 @@ export async function createTransaction(d9: D9Client, input: CreateTxnInput): Pr
     data:   body,
   });
 
-  if (data.state !== 'ACCEPTED') {
-    throw new Error(`Unexpected state on createTransaction: ${data.state}/${data.sub_state}`);
+  if (data.data?.state !== 'ACCEPTED') {
+    throw new Error(`Unexpected state on createTransaction: ${data.data?.state}/${data.data?.sub_state}`);
   }
 
   return {
-    transactionRefNumber:      data.data.transaction_ref_number,
-    agentTransactionRefNumber: data.data.agent_transaction_ref_number,
-    expiresAt:                 new Date(data.data.expires_at),
-    raw:                       data,
+    transactionRefNumber: data.data.transaction_ref_number,
+    expiresAt:            new Date(data.data.expires_at),
+    raw:                  data,
   };
 }
 ```
@@ -263,34 +371,32 @@ public class TransactionService {
             throw new D9IntegrationException("Quote expired before createTransaction; re-quote required.");
         }
 
-        var agentRef = "PARTNER_" + UUID.randomUUID();
-
         var body = Map.of(
-            "quote_id",                     input.quote().quoteId(),
-            "service_type",                 input.serviceType().name(),
-            "agent_transaction_ref_number", agentRef,
-            "sender",                       input.sender(),
-            "receiver",                     input.receiver(),
-            "transaction", Map.of(
-                "source_of_income", input.sourceOfIncome(),
-                "purpose_of_txn",   input.purposeOfTxn()));
+            "type",             "SEND",
+            "instrument",       "REMITTANCE",
+            "source_of_income", input.sourceOfIncome(),
+            "purpose_of_txn",   input.purposeOfTxn(),
+            "message",          input.message() != null ? input.message() : "Agency transaction",
+            "sender",           input.sender(),
+            "receiver",         input.receiver(),
+            "transaction",      Map.of("quote_id", input.quote().quoteId()));
 
         var resp = client.http().post()
             .uri("/amr/paas/api/v1_0/paas/createtransaction")
             .bodyValue(body)
             .retrieve()
-            .onStatus(s -> s.value() == 422,
-                      r -> r.bodyToMono(D9ErrorBody.class).map(D9UnprocessableException::new))
+            .onStatus(s -> s.value() == 400,
+                      r -> r.bodyToMono(D9ErrorBody.class).map(D9ValidationException::new))
             .bodyToMono(CreateTxnResponse.class)
             .block();
 
-        if (!"ACCEPTED".equals(resp.state())) {
-            throw new D9IntegrationException("Unexpected state: " + resp.state() + "/" + resp.subState());
+        if (!"ACCEPTED".equals(resp.data().state())) {
+            throw new D9IntegrationException(
+                "Unexpected state: " + resp.data().state() + "/" + resp.data().subState());
         }
 
         return new Transaction(
             resp.data().transactionRefNumber(),
-            resp.data().agentTransactionRefNumber(),
             Instant.parse(resp.data().expiresAt()),
             resp);
     }
@@ -299,18 +405,19 @@ public class TransactionService {
 
 ## Anti-patterns to flag
 
-1. **Generating `agent_transaction_ref_number` inside the API call.** Generate it *before*, persist it, then call. Otherwise a network timeout means you can't retry idempotently — you don't know if the transaction was created.
-2. **Mixing C2C and B2B fields in the same sender object.** Pick one shape based on `service_type` and stick to it.
-3. **Skipping `account_type_code` for non-PK BANK.** Most common 806500. Always source from masters; never default.
-4. **Silent quote re-acquisition on 40004.** That's hiding a UX bug — the user should see "quote expired, please confirm new rate" and explicitly approve.
-5. **Storing only `agent_transaction_ref_number`.** You also need `transaction_ref_number` for status calls. Persist both, side by side.
-6. **Treating ACCEPTED as final.** It's "created and validated, ready to confirm." Funds aren't moving until `confirmTransaction`.
-7. **Floating-point amounts.** Use `BigDecimal` (Java) or string decimals (TS).
+1. **Putting `source_of_income` / `purpose_of_txn` inside `transaction`.** They are top-level. Same for `type`, `instrument`, `message`. Only `quote_id` lives in `transaction`.
+2. **Using `bank_id` / `branch_id` for the receiver.** Those fields do not appear in the canonical bodies. Use `routing_code` (IN), `iso_code` + `iban` (PK), or `iso_code` + `account_number` (BD).
+3. **Using `id_number` / `issue_date` / `expiry_date` on `sender_id`.** Names are `id` / `issued_on` / `valid_through`.
+4. **Past `valid_through` date on a sender ID.** Sandbox rejects with `40000` — `valid_through` must be today or later. Watch out for stale fixtures from old Postman runs.
+5. **Treating `details` as optional in the error path.** The `details` map (or `errors[]` for some endpoints) is the only way to know which field was rejected. Always log and surface it.
+6. **Treating `ACCEPTED` as final.** It's "created and reserved, ready to confirm." Funds aren't moving until `confirmtransaction`.
+7. **Skipping `account_type_code` for non-PK BANK.** Most common 40000. Always source from `/paas/codes?code=account_types`; never default.
+8. **Floating-point amounts.** Use `BigDecimal` (Java) or string decimals (TS).
 
 ## Verification
 
 Ask Claude to run an end-to-end create against sandbox via MCP:
 
-> "Create a sandbox transaction for 100 AED → INR BANK using sender Jane Doe and receiver Priya Sharma."
+> "Create a sandbox AE→IN BANK transaction for 100 AED."
 
-Claude calls `d9_quote` → `d9_create_txn` and returns the parsed transaction with `transaction_ref_number`. Then run `d9-status` to confirm and track.
+Claude calls `d9_quote` → `d9_create_txn` and returns the parsed transaction with `transaction_ref_number`. Then run `d9-status` to confirm and track. Or run the bundled `/digit9-paas:d9-test` command for the full happy path.

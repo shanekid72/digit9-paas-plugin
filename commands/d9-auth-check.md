@@ -2,7 +2,7 @@
 description: Verify the partner's sandbox credentials work — fetches a token from the Digit9 sandbox and reports success/failure with a diagnosis on common error modes.
 ---
 
-You are running the `/d9:auth-check` command. Your job is to confirm that the partner's environment is wired correctly and that they can authenticate against the Digit9 sandbox.
+You are running the `/digit9-paas:d9-auth-check` command. Your job is to confirm that the partner's environment is wired correctly and that they can authenticate against the Digit9 sandbox.
 
 ## Steps
 
@@ -62,6 +62,6 @@ If that 200s, headers are wired correctly. If it returns `40000 BAD_REQUEST`, on
 
 If everything passes, hint at next steps:
 
-> "Auth and headers verified. Try `/d9:test` for an end-to-end run against sandbox, or just start asking Claude to build out the integration — the right skills will load on demand."
+> "Auth and headers verified. Try `/digit9-paas:d9-test` for an end-to-end run against sandbox, or just start asking Claude to build out the integration — the right skills will load on demand."
 
 If it fails, do not continue. The partner has to fix credentials before any other plugin work makes sense.
