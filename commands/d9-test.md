@@ -17,7 +17,7 @@ Read `CLAUDE.md` for the project's `{{DEFAULT_CORRIDOR}}` (e.g. `AE→IN BANK`) 
 
 Use sandbox-safe test PII:
 
-- C2C sender: `John Smith`, `+971501234567`, AE, passport `GB1234567`
+- C2C sender: `John Smith`, `+971501234567`, AE, Emirates ID `784199191427626` (id_code `4` — only value verified end-to-end against sandbox; do not substitute `15`/passport without first checking `/paas/codes?code=id_types`)
 - B2B sender: `Acme Trading LLC`, agent_customer_number `TEST_BIZ_42`
 - Receiver (IN BANK): `Priya Sharma`, `+919812345678`, IN, AADHAAR `1234-5678-9012`, HDFC Bank, account `12345678901234`, account_type_code `1`
 

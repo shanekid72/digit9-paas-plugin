@@ -1,6 +1,6 @@
 {
   "name": "digit9-paas",
-  "version": "0.1.3",
+  "version": "0.1.4",
   "description": "Digit9 Payments-as-a-Service integration plugin for Claude Code. Teaches partner LFIs how to integrate the cross-border remittance API correctly, with live sandbox calls, scaffolded boilerplate in Java/Spring and Node/TS, and end-to-end happy-path verification.",
   "author": {
     "name": "Digit9",
