@@ -57,8 +57,19 @@ public class QuoteService {
             throw new D9IntegrationException("Unexpected sub_state: " + data.get("sub_state"));
         }
 
-        var fxRates = (Map<String, Object>) data.get("fx_rates");
-        var fees    = (List<Map<String, Object>>) data.getOrDefault("fee_details", List.of());
+        // fx_rates is an array — typically two entries, both SELL: one for
+        // sending→receiving and the inverse. Pick the sending→receiving direction.
+        var fxRates = (List<Map<String, Object>>) data.getOrDefault("fx_rates", List.of());
+        var primary = fxRates.stream()
+            .filter(r -> "SELL".equals(r.get("type"))
+                      && req.sendingCurrency().equals(r.get("base_currency_code"))
+                      && req.receivingCurrency().equals(r.get("counter_currency_code")))
+            .findFirst()
+            .orElseThrow(() -> new D9IntegrationException(
+                "No SELL rate found for " + req.sendingCurrency() + "→"
+                    + req.receivingCurrency() + " in quote response"));
+
+        var fees = (List<Map<String, Object>>) data.getOrDefault("fee_details", List.of());
 
         var ourFees = fees.stream()
             .filter(f -> "OUR".equals(f.get("model")))
@@ -68,7 +79,7 @@ public class QuoteService {
         return new Quote(
             (String) data.get("quote_id"),
             Instant.parse((String) data.get("expires_at")),
-            new BigDecimal((String) fxRates.get("rate")),
+            new BigDecimal(String.valueOf(primary.get("rate"))),
             ourFees,
             resp);
     }

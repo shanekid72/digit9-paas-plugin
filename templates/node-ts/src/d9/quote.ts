@@ -44,10 +44,24 @@ export async function fetchQuote(client: D9Client, q: QuoteRequest): Promise<Quo
     .filter((f: any) => f.model === 'OUR')
     .reduce((sum: number, f: any) => sum + Number(f.amount), 0);
 
+  // fx_rates is an array — typically two entries, both SELL: one for
+  // sending→receiving and the inverse. Pick the sending→receiving direction.
+  const fxRates: any[] = data.data.fx_rates ?? [];
+  const primary = fxRates.find(
+    (r: any) => r.type === 'SELL'
+      && r.base_currency_code === q.sendingCurrency
+      && r.counter_currency_code === q.receivingCurrency,
+  );
+  if (!primary) {
+    throw new Error(
+      `No SELL rate found for ${q.sendingCurrency}→${q.receivingCurrency} in quote response`,
+    );
+  }
+
   return {
     quoteId:      data.data.quote_id,
     expiresAt:    new Date(data.data.expires_at),
-    rate:         data.data.fx_rates.rate,
+    rate:         String(primary.rate),
     ourFeesTotal: ourFees,
     raw:          data,
   };

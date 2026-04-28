@@ -19,7 +19,7 @@ Use sandbox-safe test PII:
 
 - C2C sender: `John Smith`, `+971501234567`, AE, passport `GB1234567`
 - B2B sender: `Acme Trading LLC`, agent_customer_number `TEST_BIZ_42`
-- Receiver (IN BANK): `Priya Sharma`, `+919812345678`, IN, AADHAAR `1234-5678-9012`, HDFC Bank, account `12345678901234`, account_type_code `01`
+- Receiver (IN BANK): `Priya Sharma`, `+919812345678`, IN, AADHAAR `1234-5678-9012`, HDFC Bank, account `12345678901234`, account_type_code `1`
 
 ## Steps to execute
 

@@ -9,7 +9,7 @@
       "name": "digit9-paas",
       "source": "./",
       "description": "Digit9 Payments-as-a-Service integration plugin for partner LFIs. Skills, slash commands, and a sandbox MCP server.",
-      "version": "0.1.2"
+      "version": "0.1.3"
     }
   ]
 }
