@@ -54,6 +54,8 @@ Capture `quote_id`, `expires_at`, `rate`, sum of OUR fees.
 
 ### 4. Create transaction
 
+BEFORE building the createtransaction body, read the `d9-transaction` skill in full and use the canonical Postman shape from there verbatim. Do not guess field names — the API rejects with generic 40000 errors that mask the real cause.
+
 Call `d9_create_txn` with the quote_id, the chosen service_type, and the canonical sender/receiver objects.
 Capture `transaction_ref_number` (16 chars).
 
