@@ -3,13 +3,16 @@ import { D9Client } from './client.js';
 export type State = 'INITIATED' | 'ACCEPTED' | 'IN_PROGRESS' | 'COMPLETED' | 'FAILED' | 'CANCELLED';
 const TERMINAL: ReadonlySet<State> = new Set(['COMPLETED', 'FAILED', 'CANCELLED']);
 
+// Sandbox responses use envelope { status, status_code, data: { state, sub_state, ... } }.
+// Functions here unwrap to the inner `data` object so callers can read `result.state` directly.
+
 export async function confirmTransaction(client: D9Client, txnRef: string) {
   const { data } = await client.request<any>({
     method: 'POST',
     url:    '/amr/paas/api/v1_0/paas/confirmtransaction',
     data:   { transaction_ref_number: txnRef },
   });
-  return data;
+  return data.data;
 }
 
 export async function enquireTransaction(client: D9Client, txnRef: string) {
@@ -18,7 +21,7 @@ export async function enquireTransaction(client: D9Client, txnRef: string) {
     url:    '/amr/paas/api/v1_0/paas/enquire-transaction',
     params: { transaction_ref_number: txnRef },
   });
-  return data;
+  return data.data;
 }
 
 export async function cancelTransaction(
@@ -32,7 +35,7 @@ export async function cancelTransaction(
     url:    '/amr/paas/api/v1_0/paas/canceltransaction',
     data:   { transaction_ref_number: txnRef, cancel_reason: reason, remarks },
   });
-  return data;
+  return data.data;
 }
 
 export interface PollOptions {

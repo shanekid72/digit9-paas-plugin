@@ -3,14 +3,12 @@ package com.partner.d9;
 import com.partner.d9.MasterDataService.ReceivingMode;
 import com.partner.d9.QuoteService.QuoteRequest;
 import com.partner.d9.TransactionService.CreateTxnInput;
-import com.partner.d9.TransactionService.ServiceType;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.condition.EnabledIfEnvironmentVariable;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 
 import java.math.BigDecimal;
-import java.time.Duration;
 import java.util.List;
 import java.util.Map;
 
@@ -19,7 +17,10 @@ import static org.assertj.core.api.Assertions.assertThat;
 /**
  * End-to-end sandbox test. Skipped if D9_CLIENT_SECRET / D9_USERNAME aren't set.
  *
- * Mirrors what `/d9:test` does, in code form. Useful in CI as a nightly smoke test.
+ * Runs the canonical happy path: auth → masters → quote → create → confirm.
+ * Polling to terminal state is intentionally NOT included — sandbox payout
+ * dwell ("not a partner bug" per /digit9-paas:d9-test) makes that flaky for
+ * CI. Use the /digit9-paas:d9-test slash command for the full polling demo.
  */
 @SpringBootTest
 @EnabledIfEnvironmentVariable(named = "D9_CLIENT_SECRET", matches = ".+")
@@ -32,13 +33,12 @@ class HappyPathSandboxIT {
     @Autowired StatusService     status;
 
     @Test
-    void onboardCorridorBankQuoteCreateConfirmTerminal() {
-        // Master data sanity
+    void onboardCorridorBankQuoteCreateConfirm() {
+        // Master data sanity. The list results aren't fed into createTransaction —
+        // IN bank_details below uses canonical Postman values for repeatable test
+        // results regardless of which bank ranks first in the list response.
         assertThat(masters.listCorridors()).isNotEmpty();
-        var banks = masters.listBanks("IN", ReceivingMode.BANK);
-        assertThat(banks).isNotEmpty();
-        var bank = banks.get(0);
-        var accountType = bank.accountTypes().isEmpty() ? "01" : bank.accountTypes().get(0).code();
+        assertThat(masters.listBanks("IN", ReceivingMode.BANK)).isNotEmpty();
 
         // Quote
         var quote = quotes.fetchQuote(new QuoteRequest(
@@ -46,46 +46,52 @@ class HappyPathSandboxIT {
         assertThat(quote.quoteId()).isNotBlank();
         assertThat(quote.expiresAt()).isAfter(java.time.Instant.now());
 
-        // Create
+        // Create — canonical AE → IN BANK shape per the d9-transaction skill
+        // (taken verbatim from the PAASTestAgent Postman collection).
         var sender = Map.<String, Object>of(
-            "first_name", "Test",
-            "last_name",  "Sender",
-            "mobile_number", "+971501234567",
-            "nationality", "AE",
-            "date_of_birth", "1985-04-15",
-            "country_of_birth", "GB",
-            "sender_id",      List.of(Map.of("id_code", "PASSPORT", "id_number", "GB1234567",
-                                              "issue_date", "2019-01-01", "expiry_date", "2029-01-01",
-                                              "issued_country", "GB")),
-            "sender_address", List.of(Map.of("address_type", "RES", "address_line", "Apt 4B",
-                                              "city", "Dubai", "postal_code", "00000", "country_code", "AE")));
+            "agent_customer_number", "DEMO_TEST_001",
+            "mobile_number",         "+971508359468",
+            "first_name",            "George",
+            "last_name",             "Micheal",
+            "date_of_birth",         "1995-08-22",
+            "country_of_birth",      "IN",
+            "nationality",           "IN",
+            "sender_id", List.of(Map.of(
+                "id_code",       "4",                    // numeric — Emirates ID
+                "id",            "784199191427626",
+                "issued_on",     "2022-10-31",
+                "valid_through", "2030-11-01")),         // must be today or later
+            "sender_address", List.of(Map.of(
+                "address_type", "PRESENT",               // PRESENT | PERMANENT — not RES/BIZ
+                "address_line", "Sheikh Zayed Road, Tower 3",
+                "post_code",    "710",                   // post_code, not postal_code
+                "town_name",    "DUBAI",                 // town_name, not city
+                "country_code", "AE")));
 
         var receiver = Map.<String, Object>of(
-            "first_name", "Test",
-            "last_name",  "Receiver",
-            "mobile_number", "+919812345678",
-            "nationality", "IN",
-            "relation_code", "FRND",
-            "receiver_id",      List.of(Map.of("id_code", "AADHAAR", "id_number", "1234-5678-9012",
-                                                "issued_country", "IN")),
-            "receiver_address", List.of(Map.of("address_type", "RES", "address_line", "12 MG Road",
-                                                "city", "Mumbai", "postal_code", "400001", "country_code", "IN")),
+            "first_name",    "Anija FirstName",
+            "last_name",     "Anija Lastname",
+            "mobile_number", "+919586741500",
+            "date_of_birth", "1990-08-22",
+            "gender",        "F",
+            "nationality",   "IN",
+            "relation_code", "32",                       // numeric — friend
+            "receiver_address", List.of(Map.of(
+                "address_type", "PRESENT",
+                "address_line", "12 MG Road",
+                "town_name",    "THRISSUR",
+                "country_code", "IN")),
             "bank_details", Map.of(
-                "bank_id",           bank.bankId(),
-                "iso_code",          bank.isoCode(),
-                "account_number",    "12345678901234",
-                "account_type_code", accountType));
+                "account_type_code", "1",                // numeric-as-string — savings
+                "routing_code",      "FDRL0001033",      // IFSC for IN; no iso_code, no bank_id
+                "account_number",    "99345724439934"));
 
         var txn = txns.createTransaction(new CreateTxnInput(
-            quote, ServiceType.{{SERVICE_TYPE}}, sender, receiver, "SLRY", "SUPP", null));
+            quote, sender, receiver, "SLRY", "SUPP", null));
         assertThat(txn.transactionRefNumber()).matches("\\d{16}");
 
         // Confirm
         var confirmed = status.confirm(txn.transactionRefNumber());
-        assertThat(confirmed.get("state")).isEqualTo("IN_PROGRESS");
-
-        // Poll
-        var terminal = status.pollUntilTerminal(txn.transactionRefNumber(), Duration.ofSeconds(90));
-        assertThat(terminal.get("state")).isIn("COMPLETED", "FAILED", "CANCELLED");
+        assertThat(confirmed.get("state")).isIn("IN_PROGRESS", "COMPLETED");
     }
 }

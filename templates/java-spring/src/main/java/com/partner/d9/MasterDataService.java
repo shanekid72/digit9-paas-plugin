@@ -55,7 +55,10 @@ public class MasterDataService {
                            .queryParam("receiving_mode",         mode.name())
                            .build())
                 .retrieve().bodyToMono(Map.class).block();
-            var data = (List<Map<String, Object>>) resp.get("data");
+            // Banks endpoint paginates with envelope { data: { list: [...], total_records } }.
+            // Other masters (corridors, branches) return { data: [...] } directly.
+            var dataObj = (Map<String, Object>) resp.get("data");
+            var data    = (List<Map<String, Object>>) dataObj.getOrDefault("list", List.of());
             return data.stream().map(d -> new Bank(
                 (String) d.get("bank_id"),
                 (String) d.get("bank_name"),

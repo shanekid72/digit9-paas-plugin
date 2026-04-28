@@ -36,8 +36,8 @@ export async function fetchQuote(client: D9Client, q: QuoteRequest): Promise<Quo
     },
   });
 
-  if (data.sub_state !== 'QUOTE_CREATED') {
-    throw new Error(`Unexpected quote sub_state: ${data.sub_state}`);
+  if (data.data?.sub_state !== 'QUOTE_CREATED') {
+    throw new Error(`Unexpected quote sub_state: ${data.data?.sub_state}`);
   }
 
   const ourFees = (data.data.fee_details ?? [])

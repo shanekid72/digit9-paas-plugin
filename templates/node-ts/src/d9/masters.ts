@@ -44,7 +44,9 @@ export async function listBanks(
       url:    '/raas/masters/v1/banks',
       params: { receiving_country_code: receivingCountryCode, receiving_mode: receivingMode },
     });
-    return (data.data ?? []).map((b: any) => ({
+    // Banks endpoint paginates with envelope { data: { list: [...], total_records } }.
+    // Other masters (corridors, branches) return { data: [...] } directly.
+    return (data.data?.list ?? []).map((b: any) => ({
       bankId:   b.bank_id,
       bankName: b.bank_name,
       isoCode:  b.iso_code,

@@ -25,7 +25,7 @@ When working on this project, you are integrating with Digit9's PaaS API. Read t
 - All Digit9 calls go through a single `D9Client` (`src/d9/client.{java,ts}`). Do not call `axios`/`WebClient` directly elsewhere.
 - The four context headers (`sender`, `channel`, `company`, `branch`) are required on every endpoint. They are injected by `D9Client`. Never set them manually in business code.
 - Access tokens are cached in `D9Client` with a 30-second safety margin before `expires_in`. Refresh is automatic.
-- Partner transaction references use the prefix `{{PARTNER_PREFIX}}_` followed by a UUID.
+- Idempotency on `createTransaction` is keyed off `sender.agent_customer_number` plus `quote_id` — that's the partner's stable customer ID. The system-generated 16-char `transaction_ref_number` is the canonical ID for everything afterward (confirm, enquire, cancel, webhook reconciliation).
 - Webhooks live at `POST /webhooks/digit9` and are verified before any state change.
 
 ## Sandbox

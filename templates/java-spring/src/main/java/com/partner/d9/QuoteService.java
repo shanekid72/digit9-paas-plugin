@@ -52,11 +52,11 @@ public class QuoteService {
             .bodyToMono(Map.class)
             .block();
 
-        if (!"QUOTE_CREATED".equals(resp.get("sub_state"))) {
-            throw new D9IntegrationException("Unexpected sub_state: " + resp.get("sub_state"));
+        var data    = (Map<String, Object>) resp.get("data");
+        if (!"QUOTE_CREATED".equals(data.get("sub_state"))) {
+            throw new D9IntegrationException("Unexpected sub_state: " + data.get("sub_state"));
         }
 
-        var data    = (Map<String, Object>) resp.get("data");
         var fxRates = (Map<String, Object>) data.get("fx_rates");
         var fees    = (List<Map<String, Object>>) data.getOrDefault("fee_details", List.of());
 

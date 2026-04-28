@@ -16,26 +16,34 @@ public class StatusService {
 
     public StatusService(D9Client client) { this.client = client; }
 
+    // Sandbox responses use envelope { status, status_code, data: { state, sub_state, ... } }.
+    // Methods here unwrap to the inner `data` map so callers can read result.get("state") directly.
+
+    @SuppressWarnings("unchecked")
     public Map<String, Object> confirm(String transactionRefNumber) {
-        return client.http().post()
+        var resp = client.http().post()
             .uri("/amr/paas/api/v1_0/paas/confirmtransaction")
             .bodyValue(Map.of("transaction_ref_number", transactionRefNumber))
             .retrieve()
             .bodyToMono(Map.class)
             .block();
+        return (Map<String, Object>) resp.get("data");
     }
 
+    @SuppressWarnings("unchecked")
     public Map<String, Object> enquire(String transactionRefNumber) {
-        return client.http().get()
+        var resp = client.http().get()
             .uri(b -> b.path("/amr/paas/api/v1_0/paas/enquire-transaction")
                        .queryParam("transaction_ref_number", transactionRefNumber).build())
             .retrieve()
             .bodyToMono(Map.class)
             .block();
+        return (Map<String, Object>) resp.get("data");
     }
 
+    @SuppressWarnings("unchecked")
     public Map<String, Object> cancel(String transactionRefNumber, String reason, String remarks) {
-        return client.http().post()
+        var resp = client.http().post()
             .uri("/amr/paas/api/v1_0/paas/canceltransaction")
             .bodyValue(Map.of(
                 "transaction_ref_number", transactionRefNumber,
@@ -44,6 +52,7 @@ public class StatusService {
             .retrieve()
             .bodyToMono(Map.class)
             .block();
+        return (Map<String, Object>) resp.get("data");
     }
 
     /** Polls every 5–30s with backoff until terminal state or timeout. */
