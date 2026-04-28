@@ -75,7 +75,11 @@ The Postman collection shows one sender shape across all corridors — keyed off
 **Sender field rules — the ones that bite:**
 
 - `agent_customer_number` is your stable identifier for this sender — persist it, reuse it across that customer's future transactions. It's how Digit9 matches repeat senders for monitoring and limits.
-- `sender_id[].id_code` is **numeric**, not a string label. The Postman examples use `"4"` (Emirates ID, 15-digit ID number) for AE-origin senders and `"15"` for senders using a different government-issued ID. Get the full `id_code` enum via `GET /amr/paas/api/v1_0/paas/codes?code=id_types`.
+- `sender_id[].id_code` is **numeric**, not a string label. The Postman example uses `"4"` (Emirates ID, 15-digit ID number) for AE-origin senders — that is the only value verified end-to-end against the live sandbox by this plugin. Other values you'll see cited (e.g. `"15"` for non-Emirates government IDs) are **not verified** — do not assume; fetch the live enum via `GET /amr/paas/api/v1_0/paas/codes?code=id_types` and validate against that.
+
+#### id_code values are tenant-configured
+
+The codes accepted for `id_types` are tenant-configured. Always fetch the live enum at runtime via `GET /amr/paas/api/v1_0/paas/codes?code=id_types` and validate the partner-supplied `id_code` against that response, not against examples in this skill. The only `id_code` value confirmed end-to-end against the sandbox in this plugin's test harness is `"4"` (Emirates ID); every other value should be validated against the live `/paas/codes?code=id_types` enum before sending.
 - `sender_id[].id` (the actual ID number) is named `id`, **not** `id_number`.
 - Date fields are `issued_on` / `valid_through` (`YYYY-MM-DD`), **not** `issue_date` / `expiry_date`. `valid_through` must be in the future or today — past dates fail with `40000`.
 - `sender_address[].address_type` is `"PRESENT"` (current) or `"PERMANENT"` — not `"RES"` / `"BIZ"`.
@@ -256,6 +260,18 @@ The sandbox wraps every error in this envelope:
 | 40004  | NOT_FOUND — usually a stale `quote_id`                     | Re-quote (see `d9-quote`); never silently retry         |
 | 40001  | UNAUTHORIZED — token expired                               | Refresh token; auth interceptor should handle this      |
 | 50000  | INTERNAL_SERVICE_ERROR                                     | Retry with backoff; if persistent, alert ops            |
+
+### Misleading errors
+
+A `40000` whose `details` map names a `sender_id` field path with the message `"required data is missing"` **usually means the value isn't in the accepted enum**, not that the field is literally absent from the request body.
+
+Concrete example, captured live: sending `{"id_code": "15", "id": "GB1234567", ...}` returned
+
+```
+sender.sender_id.idcode: [COM] Invalid request: required data is missing
+```
+
+even though `id_code` was present. The same body with `id_code: "4"` (Emirates ID — the verbatim Postman example) succeeded and returned `transaction_ref_number=5706126111845722`. The sandbox phrases enum-rejection as "required data is missing" — when you see that on a `sender_id` path, first check the value against `/paas/codes?code=id_types` before you go hunting for a missing field.
 
 ## Canonical implementation
 

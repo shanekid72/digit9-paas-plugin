@@ -164,11 +164,17 @@ Terminal states: `COMPLETED`, `FAILED`, `CANCELLED`. Stop polling once you hit o
 
 **Don't hard-code the sub_state list as an exhaustive enum** — Digit9 occasionally adds new sub-states on the IN_PROGRESS path. Drive logic off `state`; treat unknown `sub_state` as opaque-but-loggable.
 
+## Sandbox vs production timing
+
+Enquire typically stays at `state=IN_PROGRESS / sub_state=TXN_PREPARED` for **60–120 seconds** in sandbox before reaching a terminal state (and occasionally longer under load). Production settles in seconds. **Polling logic should not time out under 5 minutes when developing against sandbox** — anything shorter will produce false-negative "stuck" reports against perfectly healthy sandbox transactions.
+
+Note that `confirmtransaction` may return `sub_state=PAYMENT_SETTLED` immediately even though `enquire` reflects `sub_state=TXN_PREPARED` for a while afterward — these are two different views (partner-side commitment vs payout-side state), not a contradiction. Don't write logic that asserts the two responses agree at any given moment; trust enquire as the source of truth for payout state.
+
 ## Polling cadence
 
 - **First poll:** ~5 seconds after confirm.
 - **Subsequent:** every 10 seconds for the first 2 minutes, then every 30s.
-- **Stop:** when `state ∈ {COMPLETED, FAILED, CANCELLED}` or after 30 minutes (escalate to ops).
+- **Stop:** when `state ∈ {COMPLETED, FAILED, CANCELLED}` or after 30 minutes (escalate to ops). In sandbox, do not give up before 5 minutes — see "Sandbox vs production timing" above.
 
 **Even better — use webhooks instead of polling for the primary path** (see `d9-webhooks`), and reserve polling for reconciliation backfill of any transactions where webhook delivery failed.
 

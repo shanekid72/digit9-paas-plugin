@@ -73,7 +73,7 @@ Call `d9_confirm_txn(txn_ref)`. Expect `state=IN_PROGRESS`.
 
 ### 6. Enquire / poll until terminal
 
-Call `d9_enquire_txn(txn_ref)` every 5–10s until state is COMPLETED, FAILED, or CANCELLED, or 90 seconds elapse.
+Call `d9_enquire_txn(txn_ref)` every 5–10s until state is COMPLETED, FAILED, or CANCELLED, or 5 minutes elapse. Sandbox dwell at `state=IN_PROGRESS / sub_state=TXN_PREPARED` is normal for 60–120 seconds — do not treat that window as a failure. Only escalate if you exceed 5 minutes.
 
 ```
 → Enquire (4x) .... ✓ state=COMPLETED  sub_state=PAID  settlement=INR 2238.00
@@ -120,6 +120,6 @@ If any step failed, print which one and the error body. Do not continue past a f
 | 40000 BAD_REQUEST on any call                | Missing `sender`/`channel`/`company`/`branch`   |
 | 40004 NOT_FOUND on createTxn                 | Quote expired (>10 min between quote and create)|
 | 806500 on createTxn                          | Field shape mismatch — log the body's `errors[]`|
-| Timeout on enquire after 90s                 | Sandbox slow; not a partner bug                 |
+| Timeout on enquire after 5 minutes           | Sandbox slow; not a partner bug. Sandbox dwell at `TXN_PREPARED` is normal for 60–120s; only treat as anomaly if it exceeds 5 min. |
 
 When a failure is diagnosable, suggest the fix in plain English: "Your quote took 11 minutes to use — the quote endpoint TTL is 10 minutes. Re-running the test in tight sequence should pass."
